@@ -24,7 +24,7 @@ device = get_device()
 # Choose Model
 # ----------------------
 # Change this to "resnet" when training ResNet
-model_name = "resnet"
+model_name = "efficientnet"
 
 model = build_model(device, model_name)
 

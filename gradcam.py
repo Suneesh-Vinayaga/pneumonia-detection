@@ -5,6 +5,7 @@ import os
 from torchvision import transforms
 from PIL import Image
 from build_model import build_model
+from lung_segmentation import segment_lung
 
 
 def generate_gradcam(image_path, model_path, device):
@@ -12,7 +13,7 @@ def generate_gradcam(image_path, model_path, device):
     # ----------------------------
     # Load model
     # ----------------------------
-    model = build_model(device, model_name="resnet")
+    model = build_model(device, model_name="efficientnet")
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
 
@@ -37,7 +38,13 @@ def generate_gradcam(image_path, model_path, device):
         activations.append(output)
 
     target_layer.register_forward_hook(forward_hook)
-    target_layer.register_backward_hook(backward_hook)
+    target_layer.register_full_backward_hook(backward_hook)
+
+    # ----------------------------
+    # Lung segmentation (match predict.py)
+    # ----------------------------
+    _, _, segmented = segment_lung(image_path)
+    segmented_image = Image.fromarray(segmented).convert("RGB")
 
     # ----------------------------
     # Image preprocessing
@@ -49,8 +56,7 @@ def generate_gradcam(image_path, model_path, device):
                              [0.229, 0.224, 0.225])
     ])
 
-    original_image = Image.open(image_path).convert("RGB")
-    input_tensor = transform(original_image).unsqueeze(0).to(device)
+    input_tensor = transform(segmented_image).unsqueeze(0).to(device)
 
     # ----------------------------
     # Forward pass
@@ -87,7 +93,7 @@ def generate_gradcam(image_path, model_path, device):
         cam += w * acts[i]
 
     cam = np.maximum(cam, 0)
-    cam = cam / cam.max()
+    cam = cam / (cam.max() + 1e-8)
 
     # ----------------------------
     # Create heatmap
@@ -95,7 +101,8 @@ def generate_gradcam(image_path, model_path, device):
     cam = cv2.resize(cam, (224, 224))
     heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
 
-    original = cv2.resize(np.array(original_image), (224, 224))
+    # Use segmented image as the base for overlay
+    original = cv2.resize(np.array(segmented_image), (224, 224))
     superimposed_img = heatmap * 0.4 + original
 
     # Convert properly
@@ -137,6 +144,6 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     image_path = "dataset_segmented/test/PNEUMONIA/person1004_virus_1686.jpeg"
-    model_path = "models/resnet_best.pth"
+    model_path = "models/efficientnet_best.pth"
 
     generate_gradcam(image_path, model_path, device)

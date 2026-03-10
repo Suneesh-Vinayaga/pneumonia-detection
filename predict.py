@@ -19,9 +19,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # -----------------------
 # Load Model
 # -----------------------
-model_path = "models/resnet_best.pth"
+model_path = "models/efficientnet_best.pth"
 
-model = build_model(device, model_name="resnet")
+model = build_model(device, model_name="efficientnet")
 model.load_state_dict(torch.load(model_path, map_location=device))
 model.eval()
 
