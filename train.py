@@ -51,8 +51,8 @@ model, train_losses, val_accuracies = train_model(
     optimizer,
     device,
     model_name,
-    epochs=20,
-    patience=3
+    epochs=40,
+    patience=7
 )
 
 

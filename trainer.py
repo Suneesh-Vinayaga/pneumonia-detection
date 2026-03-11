@@ -17,7 +17,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, device, m
         optimizer,
         mode='max',      # because we monitor validation accuracy
         factor=0.5,      # reduce LR by half
-        patience=1,      # wait 1 epoch before reducing
+        patience=2,      # wait 2 epochs before reducing
         verbose=True
     )
 

@@ -29,8 +29,12 @@ def build_model(device, model_name="resnet"):
         for param in model.parameters():
             param.requires_grad = False
 
-        # Unfreeze last feature block
+        # Unfreeze last 3 feature blocks
         for param in model.features[-1].parameters():
+            param.requires_grad = True
+        for param in model.features[-2].parameters():
+            param.requires_grad = True
+        for param in model.features[-3].parameters():
             param.requires_grad = True
 
         # Unfreeze classifier
