@@ -2,6 +2,7 @@ import streamlit as st
 from PIL import Image
 import tempfile
 from predict import predict
+from lung_segmentation import segment_lung
 
 
 st.title("Pneumonia Detection from Chest X-ray")
@@ -12,21 +13,38 @@ if uploaded_file is not None:
 
     image = Image.open(uploaded_file)
 
-    st.image(image, caption="Uploaded X-ray", use_column_width=True)
-
     # save temporarily
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
         image.save(tmp.name)
         image_path = tmp.name
 
-    prediction, confidence, heatmap_path = predict(image_path)
+    # --- Step 1: Show Lung Segmentation ---
+    st.subheader("Step 1 — Lung Segmentation")
+    st.caption("The system isolates the lung regions before classification, ensuring the model focuses only on relevant anatomy.")
 
-    st.subheader("Prediction")
+    original, mask, segmented = segment_lung(image_path)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.image(original, caption="Original X-ray", use_container_width=True)
+    with col2:
+        st.image(segmented, caption="Segmented Lungs", use_container_width=True)
+
+    st.divider()
+
+    # --- Step 2: Prediction ---
+    st.subheader("Step 2 — Prediction")
+
+    prediction, confidence, heatmap_path = predict(image_path)
 
     st.write("Result:", prediction)
     st.write("Confidence:", round(confidence*100,2), "%")
 
-    st.subheader("GradCAM Explanation")
+    st.divider()
+
+    # --- Step 3: Grad-CAM Explanation ---
+    st.subheader("Step 3 — GradCAM Explanation")
+    st.caption("Highlights the regions the model focused on to make its decision.")
 
     heatmap = Image.open(heatmap_path)
 
