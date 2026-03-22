@@ -1,8 +1,14 @@
 import streamlit as st
 from PIL import Image
 import tempfile
-from predict import predict
+import torch
+from predict import predict, predict_raw
 from lung_segmentation import segment_lung
+from gradcam import generate_gradcam, generate_gradcam_raw
+
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model_path = "models/efficientnet_best.pth"
 
 
 st.title("Pneumonia Detection from Chest X-ray")
@@ -32,20 +38,69 @@ if uploaded_file is not None:
 
     st.divider()
 
-    # --- Step 2: Prediction ---
-    st.subheader("Step 2 — Prediction")
+    # --- Step 2: Side-by-Side Comparison ---
+    st.subheader("Step 2 — Comparison: With vs Without Segmentation")
+    st.caption("The same model processes both the raw X-ray and the segmented version. Compare the predictions and Grad-CAM heatmaps to see how segmentation influences model behavior.")
 
-    prediction, confidence, heatmap_path = predict(image_path)
+    # Run both pipelines
+    with st.spinner("Running predictions..."):
+        # Without segmentation (raw image)
+        raw_prediction, raw_confidence = predict_raw(image_path)
+        raw_heatmap_path = generate_gradcam_raw(image_path, model_path, device)
 
-    st.write("Result:", prediction)
-    st.write("Confidence:", round(confidence*100,2), "%")
+        # With segmentation
+        seg_prediction, seg_confidence, seg_heatmap_path = predict(image_path)
+
+    col_raw, col_seg = st.columns(2)
+
+    with col_raw:
+        st.markdown("### 🔴 Without Segmentation")
+        st.metric(label="Prediction", value=raw_prediction)
+        st.metric(label="Confidence", value=f"{round(raw_confidence*100, 2)}%")
+        st.image(
+            Image.open(raw_heatmap_path),
+            caption="Grad-CAM — Full Image (may focus on non-lung areas)",
+            use_container_width=True
+        )
+
+    with col_seg:
+        st.markdown("### 🟢 With Segmentation")
+        st.metric(label="Prediction", value=seg_prediction)
+        st.metric(label="Confidence", value=f"{round(seg_confidence*100, 2)}%")
+        st.image(
+            Image.open(seg_heatmap_path),
+            caption="Grad-CAM — Segmented Lungs (focused on lung tissue)",
+            use_container_width=True
+        )
 
     st.divider()
 
-    # --- Step 3: Grad-CAM Explanation ---
-    st.subheader("Step 3 — GradCAM Explanation")
-    st.caption("Highlights the regions the model focused on to make its decision.")
+    # --- Step 3: Verdict ---
+    st.subheader("Step 3 — Analysis Verdict")
 
-    heatmap = Image.open(heatmap_path)
+    # Compare results
+    same_prediction = raw_prediction == seg_prediction
+    confidence_diff = abs(seg_confidence - raw_confidence) * 100
 
-    st.image(heatmap, caption="GradCAM Heatmap")
+    if same_prediction:
+        st.success(
+            f"✅ **Both pipelines agree:** {seg_prediction}\n\n"
+            f"- Without Segmentation: **{round(raw_confidence*100, 2)}%** confidence\n"
+            f"- With Segmentation: **{round(seg_confidence*100, 2)}%** confidence\n\n"
+            f"Confidence difference: **{round(confidence_diff, 2)}%**"
+        )
+    else:
+        st.warning(
+            f"⚠️ **Pipelines disagree!**\n\n"
+            f"- Without Segmentation: **{raw_prediction}** ({round(raw_confidence*100, 2)}%)\n"
+            f"- With Segmentation: **{seg_prediction}** ({round(seg_confidence*100, 2)}%)\n\n"
+            f"This demonstrates that noise from non-lung regions can mislead the model. "
+            f"The segmented result is more reliable as it focuses exclusively on lung tissue."
+        )
+
+    st.info(
+        "💡 **Why segmentation matters:** Lung segmentation removes irrelevant structures "
+        "(ribs, diaphragm, cardiac silhouette) that can confuse the model. "
+        "Compare the Grad-CAM heatmaps above — the segmented version focuses its attention "
+        "on clinically relevant lung regions, leading to more trustworthy predictions."
+    )

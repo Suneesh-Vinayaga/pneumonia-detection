@@ -71,6 +71,31 @@ def predict(image_path):
 
 
 # -----------------------
+# Raw Prediction (No Segmentation)
+# -----------------------
+def predict_raw(image_path):
+
+    # Load original image directly (no segmentation)
+    img = Image.open(image_path).convert("RGB")
+
+    # Transform
+    img = transform(img).unsqueeze(0).to(device)
+
+    # Forward pass
+    with torch.no_grad():
+        outputs = model(img)
+        probs = F.softmax(outputs, dim=1)
+        confidence, pred = torch.max(probs, 1)
+
+    classes = ["NORMAL", "PNEUMONIA"]
+
+    prediction = classes[pred.item()]
+    confidence = confidence.item()
+
+    return prediction, confidence
+
+
+# -----------------------
 # Run Test
 # -----------------------
 if __name__ == "__main__":
